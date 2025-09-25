@@ -1,0 +1,8 @@
+# At the top of app.py, add:
+from flask_cors import CORS
+
+# After creating the app:
+CORS(app, resources={r'/*': {'origins': [
+    'https://your-cloudflare-pages-url.pages.dev',
+    'http://localhost:5000'  # For local development
+]}})
