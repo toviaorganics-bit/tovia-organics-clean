@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tovia Organics - Natural & Pure Skincare</title>
+    <!-- Styles -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Third-party Scripts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.1/dist/js.cookie.min.js"></script>
+    
+    <!-- Core Utilities and Feature Modules will be loaded at the end of the body to ensure DOM is available -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FBFBFB;
+            /* always reserve vertical scrollbar to prevent layout shifts when content height changes */
+            overflow-y: scroll;
+        }
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .notification {
+            padding: 12px 24px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transform: translateX(120%);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .notification.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .notification.success {
+            border-left: 4px solid #10B981;
+        }
+        .notification.error {
+            border-left: 4px solid #EF4444;
+        }
+        .notification.warning {
+            border-left: 4px solid #F59E0B;
+        }
+        .hero-bg {
+            background-color: #F1F4F0;
+        }
+        .modal-backdrop {
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            z-index: 60;
+        }
+        .page-content {
+            display: none;
+        }
+        .page-content.active {
+            display: block;
+        }
+        body.modal-open {
+            overflow: hidden;
+        }
+        /* Modal Performance Optimizations */
+        .modal-backdrop {
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            transition: opacity 0.2s ease-out;
+            z-index: 60;
+            will-change: opacity;
+        }
+        .modal-backdrop.flex {
+            opacity: 1;
+        }
+        .modal-content {
+            will-change: transform, opacity;
+            backface-visibility: hidden;
+            transform: scale(0.95);
+            opacity: 0;
+            transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+        }
+        .modal-content.show {
+            transform: scale(1);
+            opacity: 1;
+        }
+        /* Form transitions */
+        .form-input-group {
+            position: relative;
+            transition: opacity 0.15s ease-out;
+        }
+        .form-input-group.loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .loader {
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .product-card:hover .add-to-cart-overlay {
+            opacity: 1;
+        }
+        .add-to-cart-overlay {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .cart-badge {
+            min-width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #dc2626;
+            color: white;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: -8px;
+            right: -8px;
+        }
+    </style>
+</head>
+<body class="text-gray-800 min-h-screen flex flex-col">
+    <!-- Notification Container -->
+    <div id="notification-container" class="notification-container"></div>
+
+    <!-- Header -->
+<header id="home" class="sticky top-0 bg-white/80 backdrop-blur-md z-50 border-b border-gray-200">
+  <!-- Removed container to use full width, added custom padding -->
+  <div class="w-full px-4 md:px-8 lg:px-12 py-4 flex justify-between items-center">
+    <!-- Logo - positioned at the left edge -->
+    <a href="#" onclick="showPage('home')" class="text-2xl font-bold text-gray-800 tracking-wider">
+      Tovia Organics
+    </a>
+    
+    <!-- Navigation - centered in the middle using absolute positioning on desktop -->
+    <nav class="hidden md:flex items-center space-x-8 absolute left-1/2 transform -translate-x-1/2">
+      <a href="#" onclick="showPage('products')" class="text-gray-600 hover:text-green-700 transition-colors">Products</a>
+      <a href="#about" onclick="showPage('home'); setTimeout(() => document.getElementById('about').scrollIntoView({behavior: 'smooth'}), 100)" class="text-gray-600 hover:text-green-700 transition-colors">Our Story</a>
+      <a href="#" onclick="showContactForm('contact-form-page')" class="text-gray-600 hover:text-green-700 transition-colors">Contact</a>
+    </nav>
+    
+    <!-- Right side items - positioned at the right edge -->
+    <div class="flex items-center space-x-4">
+      <!-- Cart Button -->
+      <div class="relative">
+        <button id="cart-btn" onclick="showPage('cart')" class="text-gray-600 hover:text-green-700 transition-colors relative">
+          <i data-lucide="shopping-cart" class="w-6 h-6"></i>
+          <span id="cart-count" class="cart-badge hidden">0</span>
+        </button>
+      </div>
+      
+      <!-- Auth Buttons Container - hidden on mobile -->
+      <div id="auth-buttons-desktop" class="hidden md:block">
+        <button id="signin-btn" class="bg-green-700 text-white px-5 py-2 rounded-full hover:bg-green-800 transition-shadow shadow-sm hover:shadow-md">Sign In</button>
+        <button id="account-btn" class="hidden bg-green-700 text-white px-5 py-2 rounded-full hover:bg-green-800 transition-shadow shadow-sm hover:shadow-md">Account</button>
+      </div>
+      
+      <!-- Mobile menu button -->
+      <button id="mobile-menu-btn" class="md:hidden">
+        <i data-lucide="menu"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- Mobile Menu -->
+  <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-200">
+    <a href="#" onclick="showPage('products')" class="block py-3 px-4 text-gray-600 hover:bg-gray-50">Products</a>
+    <a href="#about" onclick="showPage('home'); setTimeout(() => document.getElementById('about').scrollIntoView({behavior: 'smooth'}), 100)" class="block py-3 px-4 text-gray-600 hover:bg-gray-50">Our Story</a>
+    <a href="#" onclick="showContactForm('contact-form-page')" class="block py-3 px-4 text-gray-600 hover:bg-gray-50">Contact</a>
+    <a href="#" onclick="showPage('cart')" class="block py-3 px-4 text-gray-600 hover:bg-gray-50">Cart (<span id="mobile-cart-count">0</span>)</a>
+    <div class="border-t border-gray-100 p-4">
+      <div id="auth-buttons-mobile">
+        <button id="signin-btn-mobile" class="w-full text-left py-2 text-gray-600 hover:text-green-700 transition-colors">Sign In</button>
+        <button id="account-btn-mobile" class="hidden w-full text-left py-2 text-gray-600 hover:text-green-700 transition-colors">Account</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+    <!-- HOME PAGE -->
+    <div id="home-page" class="page-content active flex-grow">
+        <main class="flex-grow">
+            <!-- Hero Section -->
+            <section class="hero-bg">
+                <div class="container mx-auto px-4 py-20 md:py-32 flex flex-col md:flex-row items-center">
+                    <div class="md:w-1/2 text-center md:text-left mb-10 md:mb-0">
+                        <h1 class="text-4xl md:text-6xl font-bold text-gray-900 leading-tight mb-4">Purely Simple. Simply Pure.</h1>
+                        <p class="text-lg text-gray-600 mb-8">Discover radiant skin with Tovia Organics. Crafted with minimal, all-natural ingredients because you deserve nothing less.</p>
+                        <a href="#" onclick="showPage('products')" class="bg-green-700 text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-green-800 transition-shadow shadow-md hover:shadow-lg">Explore Products</a>
+                    </div>
+                    <div class="md:w-1/2">
+                        <img src="https://placehold.co/600x400/E0EBE4/333333?text=Tovia+Organics" alt="Organic Skincare Products" class="rounded-lg shadow-xl">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Our Promise Section -->
+            <section class="py-20 bg-white">
+                <div class="container mx-auto px-4 text-center">
+                    <h2 class="text-3xl font-bold mb-4">Our Promise to You</h2>
+                    <p class="text-gray-600 max-w-2xl mx-auto mb-12">We believe in transparency and the power of nature. Our products are always free from harmful chemicals.</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        <div class="flex flex-col items-center">
+                            <div class="bg-green-100 p-4 rounded-full mb-4">
+                                <i data-lucide="leaf" class="text-green-700 w-8 h-8"></i>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">All Natural</h3>
+                            <p class="text-gray-500 text-sm">Only ingredients from nature.</p>
+                        </div>
+                        <div class="flex flex-col items-center">
+                             <div class="bg-green-100 p-4 rounded-full mb-4">
+                                <i data-lucide="sparkles" class="text-green-700 w-8 h-8"></i>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">No Preservatives</h3>
+                            <p class="text-gray-500 text-sm">Freshly made in small batches.</p>
+                        </div>
+                        <div class="flex flex-col items-center">
+                             <div class="bg-green-100 p-4 rounded-full mb-4">
+                                <i data-lucide="flask-conical-off" class="text-green-700 w-8 h-8"></i>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">No Synthetics</h3>
+                            <p class="text-gray-500 text-sm">Free from parabens & phthalates.</p>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <div class="bg-green-100 p-4 rounded-full mb-4">
+                                <i data-lucide="rabbit" class="text-green-700 w-8 h-8"></i>
+                            </div>
+                            <h3 class="font-semibold text-lg mb-1">Cruelty-Free</h3>
+                            <p class="text-gray-500 text-sm">Never tested on animals.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Products Preview Section -->
+            <section id="products" class="py-20">
+                <div class="container mx-auto px-4">
+                    <h2 class="text-3xl font-bold text-center mb-12">Featured Products</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                        <!-- Product Card 1 -->
+                        <div class="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-transform duration-300">
+                            <img src="https://placehold.co/400x300/E0EBE4/333333?text=Herbal+Oil+Blend" alt="Organic Herbal Oil Blend" class="w-full h-56 object-cover">
+                            <div class="p-6">
+                                <h3 class="font-semibold text-xl mb-2">Organic Herbal Oil Blend</h3>
+                                <p class="text-gray-600 mb-4">A potent fusion of organic botanicals and essential oils for holistic skincare and wellness.</p>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xl font-bold text-green-700">$29.99</span>
+                                    <button onclick="quickAddToCart('herbal-oil-blend')" class="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold hover:bg-green-200 transition-colors">Add to Cart</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Product Card 2 -->
+                        <div class="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-transform duration-300">
+                            <img src="https://placehold.co/400x300/E0EBE4/333333?text=Rose+Water+Lotion" alt="Organic Rose Water Lotion" class="w-full h-56 object-cover">
+                            <div class="p-6">
+                                <h3 class="font-semibold text-xl mb-2">Organic Rose Water Lotion</h3>
+                                <p class="text-gray-600 mb-4">A luxurious, deeply hydrating lotion that blends organic rose water with modern skincare science.</p>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xl font-bold text-green-700">$19.99</span>
+                                    <button onclick="quickAddToCart('rose-water-lotion')" class="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold hover:bg-green-200 transition-colors">Add to Cart</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Product Card 3 -->
+                        <div class="bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-transform duration-300">
+                            <img src="https://placehold.co/400x300/E0EBE4/333333?text=Hydrating+Mist" alt="Hydrating Facial Mist" class="w-full h-56 object-cover">
+                            <div class="p-6">
+                                <h3 class="font-semibold text-xl mb-2">Hydrating Facial Mist</h3>
+                                <p class="text-gray-600 mb-4">A refreshing rosewater and aloe mist to tone and hydrate throughout the day.</p>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xl font-bold text-green-700">$18.00</span>
+                                    <button onclick="quickAddToCart('hydrating-mist', 'Hydrating Facial Mist', 18.00)" class="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold hover:bg-green-200 transition-colors">Add to Cart</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-12">
+                        <button onclick="showPage('products')" class="bg-green-700 text-white px-8 py-3 rounded-full font-semibold hover:bg-green-800 transition-colors">View All Products</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- About Section -->
+            <section id="about" class="py-20 bg-white">
+                <div class="container mx-auto px-6 flex flex-col md:flex-row items-center gap-12">
+                    <div class="md:w-1/2">
+                        <img src="https://placehold.co/500x500/E0EBE4/333333?text=Founder+Isaiah" alt="Founder of Tovia Organics" class="rounded-lg shadow-xl">
+                    </div>
+                    <div class="md:w-1/2">
+                        <h2 class="text-3xl font-bold mb-4">From Our Founder</h2>
+                        <p class="text-gray-600 mb-4 leading-relaxed">"Tovia Organics was born from a simple idea: skincare should be pure, effective, and kind to both our bodies and the planet. I struggled for years to find products without long lists of synthetic ingredients. So, I started creating my own, using only the best that nature has to offer. Every product we make is a testament to that journey, crafted with care for you and your family."</p>
+                        <p class="font-semibold text-gray-700">- Founder, Isaiah Wallace.</p>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Contact Section -->
+            <section id="contact" class="py-20">
+                 <div class="container mx-auto px-6 text-center">
+                    <h2 class="text-3xl font-bold mb-4">Get In Touch</h2>
+                    <p class="text-gray-600 max-w-lg mx-auto mb-8">Have questions or just want to say hello? We'd love to hear from you. Reach out to us anytime.</p>
+                    <a href="javascript:void(0);" onclick="showContactForm()" class="text-lg text-green-700 font-semibold border-b-2 border-green-700 hover:text-green-800 transition-colors">
+    hello@toviaorganics.com
+</a>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- PRODUCTS PAGE -->
+    <div id="products-page" class="page-content flex-grow">
+        <div class="container mx-auto px-6 py-20">
+            <h1 class="text-4xl font-bold text-center mb-12">Our Products</h1>
+            
+            <!-- Category Navigation -->
+            <div class="flex justify-center mb-16">
+                <div class="bg-white rounded-lg shadow-md p-2 flex space-x-2">
+                    <button onclick="showCategory('skincare')" id="skincare-tab" class="category-tab px-6 py-3 rounded-lg font-semibold transition-colors bg-green-700 text-white">Skincare</button>
+                    <button onclick="showCategory('cleansers')" id="cleansers-tab" class="category-tab px-6 py-3 rounded-lg font-semibold transition-colors text-gray-600 hover:text-green-700">Cleansers</button>
+                    <button onclick="showCategory('treatments')" id="treatments-tab" class="category-tab px-6 py-3 rounded-lg font-semibold transition-colors text-gray-600 hover:text-green-700">Treatments</button>
+                </div>
+            </div>
+
+            <!-- Skincare Category -->
+                <div id="skincare-category" class="category-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Rose Water Lotion -->
+                    <div class="product-card bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-all duration-300 cursor-pointer relative" onclick="showProductDetail('rose-water-lotion')">
+                        <img src="https://placehold.co/400x300/E0EBE4/333333?text=Rose+Water+Lotion" alt="Organic Rose Water Lotion" class="w-full h-56 object-cover">
+                        <div class="absolute inset-0 bg-black bg-opacity-50 add-to-cart-overlay flex items-center justify-center">
+                            <button onclick="event.stopPropagation(); quickAddToCart('rose-water-lotion', 'Organic Rose Water Lotion', 19.99)" class="bg-green-700 text-white px-6 py-3 rounded-full font-semibold hover:bg-green-800 transition-colors">Add to Cart</button>
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-semibold text-xl mb-2">Organic Rose Water Lotion</h3>
+                            <p class="text-gray-600 mb-4">Nourish your skin with our rejuvenating Rose Water Lotion, made from 100% organic ingredients.</p>
+                            <span class="text-xl font-bold text-green-700">$19.99</span>
+                        </div>
+                    </div>
+                    <!-- Herbal Oil Blend -->
+                    <div class="product-card bg-white rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-2 transition-all duration-300 cursor-pointer relative" onclick="showProductDetail('herbal-oil-blend')">
+                        <img src="https://placehold.co/400x300/E0EBE4/333333?text=Herbal+Oil+Blend" alt="Organic Herbal Oil Blend" class="w-full h-56 object-cover">
+                        <div class="absolute inset-0 bg-black bg-opacity-50 add-to-cart-overlay flex items-center justify-center">
+                            <button onclick="event.stopPropagation(); quickAddToCart('herbal-oil-blend', 'Organic Herbal Oil Blend', 29.99)" class="bg-green-700 text-white px-6 py-3 rounded-full font-semibold hover:bg-green-800 transition-colors">Add to Cart</button>
+                        </div>
+                        <div class="p-6">
+                            <h3 class="font-semibold text-xl mb-2">Organic Herbal Oil Blend</h3>
+                            <p class="text-gray-600 mb-4">Indulge in our Herbal Oil Blend, perfect for deep hydration and soft, glowing skin.</p>
+                            <span class="text-xl font-bold text-green-700">$29.99</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRODUCT DETAIL PAGE -->
+    <div id="product-detail-page" class="page-content">
+    <div class="container mx-auto px-4 py-20">
+            <button onclick="showPage('products')" class="flex items-center text-gray-600 hover:text-green-700 mb-8 transition-colors">
+                <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+                Back to Products
+            </button>
+            
+            <div id="product-detail-content">
+                <!-- Product detail content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- CART PAGE -->
+    <div id="cart-page" class="page-content">
+    <div class="container mx-auto px-4 py-20">
+            <h1 class="text-4xl font-bold text-center mb-12">Shopping Cart</h1>
+            
+            <div id="cart-content" class="max-w-4xl mx-auto">
+                <!-- Cart items will be inserted here -->
+            </div>
+
+            <div id="empty-cart" class="text-center py-16 hidden">
+                <i data-lucide="shopping-cart" class="w-16 h-16 text-gray-400 mx-auto mb-4"></i>
+                <h3 class="text-xl font-semibold text-gray-600 mb-2">Your cart is empty</h3>
+                <p class="text-gray-500 mb-6">Add some products to get started</p>
+                <button onclick="showPage('products')" class="bg-green-700 text-white px-8 py-3 rounded-full font-semibold hover:bg-green-800 transition-colors">Shop Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this new CONTACT FORM PAGE section after the CART PAGE and before the Footer -->
+
+<!-- CONTACT FORM PAGE --> 
+<div id="contact-form-page" class="page-content">
+    <div class="container mx-auto px-4 py-20">
+        <button onclick="showPage('home')" class="flex items-center text-gray-600 hover:text-green-700 mb-8 transition-colors">
+            <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i>
+            Back to Home
+        </button>
+        
+        <div class="max-w-2xl mx-auto">
+            <div class="text-center mb-12">
+                <h1 class="text-4xl font-bold mb-4">Contact Us</h1>
+                <p class="text-gray-600">We'd love to hear from you! Send us a message and we'll get back to you as soon as possible.</p>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-lg p-8">
+                <form id="contact-form" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="contact-name" class="block text-sm font-medium text-gray-700 mb-2">Your Name</label>
+                            <input type="text" id="contact-name" name="from_name" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition-colors">
+                        </div>
+                        <div>
+                            <label for="contact-email" class="block text-sm font-medium text-gray-700 mb-2">Your Email</label>
+                            <input type="email" id="contact-email" name="from_email" required
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition-colors">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="contact-subject" class="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+                        <select id="contact-subject" name="subject" required
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition-colors">
+                            <option value="">Select a topic</option>
+                            <option value="product-inquiry">Product Inquiry</option>
+                            <option value="order-support">Order Support</option>
+                            <option value="general-question">General Question</option>
+                            <option value="partnership">Partnership/Wholesale</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="contact-message" class="block text-sm font-medium text-gray-700 mb-2">Message</label>
+                        <textarea id="contact-message" name="message" rows="6" required
+                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500 transition-colors resize-vertical"
+                                  placeholder="Tell us how we can help you..."></textarea>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" id="contact-newsletter" name="newsletter"
+                               class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded">
+                        <label for="contact-newsletter" class="ml-2 block text-sm text-gray-700">
+                            I'd like to receive updates about new products and special offers
+                        </label>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" id="contact-submit-btn"
+                                class="bg-green-700 text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-green-800 transition-colors shadow-md hover:shadow-lg">
+                            Send Message
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="text-center mt-12 p-6 bg-green-50 rounded-lg">
+                <h3 class="font-semibold mb-2">Other Ways to Reach Us</h3>
+                <p class="text-gray-600">Email us directly at <a href="mailto:ToviaOrganics@gmail.com" class="text-green-700 hover:underline">ToviaOrganics@gmail.com</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add EmailJS Script before your closing body tag -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+<script>
+// Initialize EmailJS with your public key
+(function() {
+    // Replace 'YOUR_PUBLIC_KEY' with your actual EmailJS public key
+    emailjs.init("-XVDy1F2K06smRULo");
+})();
+
+// Handle contact form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const contactForm = document.getElementById('contact-form');
+    if (contactForm) {
+        contactForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Disable submit button and show loading state
+            const submitButton = document.getElementById('contact-submit-btn');
+            submitButton.disabled = true;
+            submitButton.innerHTML = 'Sending...';
+            
+            // Get form data
+            const formData = {
+                to_email: 'ToviaOrganics@gmail.com',
+                from_name: document.getElementById('contact-name').value,
+                from_email: document.getElementById('contact-email').value,
+                subject: document.getElementById('contact-subject').value,
+                message: document.getElementById('contact-message').value,
+                newsletter: document.getElementById('contact-newsletter').checked ? 'Yes' : 'No',
+                 reply_to: document.getElementById('contact-email').value
+            };
+
+            // Send email using EmailJS
+            emailjs.send(
+                'gmail_service', // Add your EmailJS service ID
+                'template_ttan1ba', // Add your EmailJS template ID
+                {
+                    subject: `New Contact Form Message: ${formData.subject}`,
+                    from_name: formData.from_name,
+                    from_email: formData.from_email,
+                    subject: formData.subject,
+                    message: formData.message,
+                    newsletter: formData.newsletter
+                }
+            )
+            .then(function(response) {
+                // Show success notification
+                if (typeof showNotification === 'function') {
+                    showNotification('Message sent successfully! We\'ll get back to you soon.', 'success');
+                } else {
+                    alert('Message sent successfully! We\'ll get back to you soon.');
+                }
+                
+                // Reset form
+                contactForm.reset();
+            })
+            .catch(function(error) {
+                // Show error notification
+                if (typeof showNotification === 'function') {
+                    showNotification('Sorry, there was an error sending your message. Please try again.', 'error');
+                } else {
+                    alert('Sorry, there was an error sending your message. Please try again.');
+                }
+                console.error('EmailJS error:', error);
+            })
+            .finally(function() {
+                // Re-enable submit button
+                submitButton.disabled = false;
+                submitButton.innerHTML = 'Send Message';
+            });
+        });
+    }
+});
+</script>
+
+    <!-- Footer -->
+    <!-- Cookie Banner -->
+    <div id="cookie-banner" class="fixed inset-x-0 bottom-0 bg-white/95 backdrop-blur-sm shadow-lg transform translate-y-full transition-transform duration-300 z-50">
+    <div class="container mx-auto px-4 py-4">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p class="text-gray-600 text-center sm:text-left">We use cookies to enhance your experience. By continuing to visit this site you agree to our use of cookies.</p>
+                    <div class="flex gap-4">
+                    <button id="accept-cookies" onclick="acceptCookies()" class="bg-green-700 text-white px-6 py-2 rounded-full hover:bg-green-800 transition-colors">Accept</button>
+                    <button id="decline-cookies" onclick="rejectCookies()" class="border border-gray-300 px-6 py-2 rounded-full hover:bg-gray-100 transition-colors">Reject</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-gray-800 text-white">
+    <div class="container mx-auto px-4 py-10">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
+                <div>
+                    <h3 class="text-xl font-bold mb-4">Tovia Organics</h3>
+                    <p class="text-gray-400">Purely Simple. Simply Pure.</p>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-4">Quick Links</h3>
+                    <ul>
+                        <li class="mb-2"><a href="#" onclick="showPage('home')" class="text-gray-400 hover:text-white">Home</a></li>
+                        <li class="mb-2"><a href="#" onclick="showPage('products')" class="text-gray-400 hover:text-white">Products</a></li>
+                        <li class="mb-2"><a href="#" onclick="showPage('home'); setTimeout(() => document.getElementById('about').scrollIntoView({behavior: 'smooth'}), 100)" class="text-gray-400 hover:text-white">Our Story</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-4">Follow Us</h3>
+                    <div class="flex justify-center md:justify-start space-x-4">
+                        <a href="#" class="text-gray-400 hover:text-white"><i data-lucide="instagram"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white"><i data-lucide="facebook"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white"><i data-lucide="twitter"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-6 text-center text-gray-500 text-sm">
+                <p>&copy; 2025 Tovia Organics. All Rights Reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Change Password Modal -->
+    <div id="change-password-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 modal-backdrop">
+        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md m-4 modal-content z-70" id="change-password-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Change Password</h2>
+                <button id="close-change-password-modal" class="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <form id="change-password-form" class="form-input-group">
+                <div class="mb-4">
+                    <label for="current-password" class="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                    <input type="password" id="current-password" class="w-full px-4 py-2 border border-gray-300 rounded-lg" required>
+                </div>
+                <div class="mb-4">
+                    <label for="new-password" class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                    <div class="relative">
+                        <input type="password" id="new-password" class="w-full px-4 py-2 border border-gray-300 rounded-lg" required>
+                        <button type="button" aria-haspopup="true" aria-controls="change-password-tooltip" aria-label="Password requirements" class="absolute right-3 top-3 text-gray-400 hover:text-gray-700 focus:outline-none" onmouseenter="document.getElementById('change-password-tooltip').classList.remove('hidden')" onmouseleave="document.getElementById('change-password-tooltip').classList.add('hidden')" onfocus="document.getElementById('change-password-tooltip').classList.remove('hidden')" onblur="document.getElementById('change-password-tooltip').classList.add('hidden')">?
+                        </button>
+                        <div id="change-password-tooltip" role="tooltip" class="hidden absolute right-0 mt-10 w-64 bg-white border border-gray-200 text-sm text-gray-700 p-3 rounded shadow-lg">
+                            Password must be at least 8 characters, include one uppercase letter, one number, and one special character.
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-green-700 text-white py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors">Change Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Account Modal -->
+    <div id="delete-account-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 modal-backdrop">
+        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md m-4 modal-content z-70" id="delete-account-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-red-600">Delete Account</h2>
+                <button id="close-delete-account-modal" class="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <p class="mb-6 text-gray-700">Deleting your account will remove your profile, orders, and data permanently. This action cannot be undone. If you are sure, type <strong>DELETE</strong> below and click Confirm.</p>
+            <form id="delete-account-form">
+                <div class="mb-4">
+                    <input type="text" id="delete-confirmation" placeholder="Type DELETE to confirm" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div class="flex space-x-4">
+                    <button type="button" id="cancel-delete-account" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="flex-1 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700">Confirm Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sign In Modal -->
+    <div id="signin-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 modal-backdrop">
+        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md m-4 modal-content z-70" id="signin-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Sign In</h2>
+                <button id="close-signin-modal" class="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <form id="signin-form" class="form-input-group">
+                <div class="mb-4">
+                    <label for="signin-email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <input type="email" id="signin-email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" required>
+                </div>
+                <div class="mb-6">
+                    <label for="signin-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" id="signin-password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" required>
+                </div>
+                <div class="mb-4">
+                    <label class="inline-flex items-center text-sm">
+                        <input type="checkbox" id="signin-show-password" class="mr-2"> Show Password
+                    </label>
+                </div>
+                <button type="submit" id="signin-submit" class="w-full bg-green-700 text-white py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors">Sign In</button>
+                <p class="text-sm text-center text-gray-500 mt-4">
+                    Don't have an account? <button type="button" id="switch-to-signup" class="font-medium text-green-700 hover:underline">Sign Up</button>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sign Up Modal -->
+    <div id="signup-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 modal-backdrop">
+        <div class="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md m-4 modal-content z-70" id="signup-modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Create Account</h2>
+                <button id="close-signup-modal" class="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <form id="signup-form" class="form-input-group">
+                <div class="mb-4">
+                    <label for="signup-name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input type="text" id="signup-name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" required>
+                </div>
+                <div class="mb-4">
+                    <label for="signup-email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <input type="email" id="signup-email" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" required>
+                </div>
+                <div class="mb-6">
+                    <label for="signup-password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div class="relative">
+                        <input type="password" id="signup-password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500" required>
+                        <!-- password tooltip trigger -->
+                        <button type="button" aria-haspopup="true" aria-controls="signup-password-tooltip" aria-label="Password requirements" class="absolute right-3 top-3 text-gray-400 hover:text-gray-700 focus:outline-none" onmouseenter="document.getElementById('signup-password-tooltip').classList.remove('hidden')" onmouseleave="document.getElementById('signup-password-tooltip').classList.add('hidden')" onfocus="document.getElementById('signup-password-tooltip').classList.remove('hidden')" onblur="document.getElementById('signup-password-tooltip').classList.add('hidden')">?
+                        </button>
+                        <div id="signup-password-tooltip" role="tooltip" class="hidden absolute right-0 mt-10 w-64 bg-white border border-gray-200 text-sm text-gray-700 p-3 rounded shadow-lg">
+                            Password must be at least 8 characters, include one uppercase letter, one number, and one special character.
+                        </div>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-500 mb-4">Password must be at least <strong id="password-min-length">8</strong> characters.</p>
+                <div class="mb-4">
+                    <label class="inline-flex items-center text-sm">
+                        <input type="checkbox" id="signup-show-password" class="mr-2"> Show Password
+                    </label>
+                </div>
+                <button type="submit" id="signup-submit" class="w-full bg-green-700 text-white py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors">Create Account</button>
+                 <p class="text-sm text-center text-gray-500 mt-4">
+                    Already have an account? <button type="button" id="switch-to-signin" class="font-medium text-green-700 hover:underline">Sign In</button>
+                </p>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Account Modal -->
+    <div id="account-modal" class="fixed inset-0 hidden items-center justify-center bg-black bg-opacity-50 modal-backdrop">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl m-4 modal-content z-70" id="account-modal-content">
+            <!-- Header -->
+            <div class="flex justify-between items-center p-6 border-b border-gray-100">
+                <h2 class="text-2xl font-bold text-gray-800">My Account</h2>
+                <button id="close-account-modal" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="p-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Main Content -->
+                    <div class="lg:col-span-2 space-y-6">
+                        <!-- Profile Card -->
+                        <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+                            <div class="flex items-center gap-6">
+                                <div class="w-20 h-20 rounded-full bg-white shadow-md flex items-center justify-center text-green-700 font-bold text-2xl border-4 border-green-200">
+                                    <span id="profile-initial"></span>
+                                </div>
+                                <div class="flex-1">
+                                    <h3 class="text-xl font-semibold text-gray-800 mb-1" id="account-name">&nbsp;</h3>
+                                    <p class="text-gray-600" id="account-email">&nbsp;</p>
+                                    <div class="mt-3">
+                                        <span id="verification-badge" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium">
+                                            <i id="verification-icon" data-lucide="alert-circle" class="w-4 h-4 mr-1"></i>
+                                            <span id="verification-text" class="text-orange-500 font-semibold">Un-Verified Account</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Order History -->
+                        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                            <div class="p-6 border-b border-gray-100">
+                                <div class="flex justify-between items-center">
+                                    <h3 class="text-lg font-semibold text-gray-800">Order History</h3>
+                                    <span class="text-sm text-gray-500">Last 30 days</span>
+                                </div>
+                            </div>
+                            <div id="order-history-content" class="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+                                <p id="no-orders-placeholder" class="text-center text-gray-500 py-12">
+                                    <i data-lucide="package" class="w-12 h-12 mx-auto mb-3 text-gray-300"></i>
+                                    No orders yet
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sidebar -->
+                    <aside class="lg:col-span-1 space-y-6">
+                        <!-- Account Actions -->
+                        <div class="bg-white rounded-xl border border-gray-200 p-6">
+                            <h4 class="font-semibold text-gray-800 mb-4">Account Management</h4>
+                            <div class="space-y-3">
+                                <button id="change-password-btn" class="w-full flex items-center justify-center gap-2 bg-amber-500 text-white py-3 px-4 rounded-lg font-semibold hover:bg-amber-600 transition-colors">
+                                    <i data-lucide="key" class="w-4 h-4"></i>
+                                    Change Password
+                                </button>
+                                <button id="delete-account-btn" class="w-full flex items-center justify-center gap-2 bg-white text-red-600 py-3 px-4 rounded-lg font-semibold border border-red-200 hover:bg-red-50 transition-colors">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    Delete Account
+                                </button>
+                                <button id="signout-btn" class="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-3 px-4 rounded-lg font-semibold hover:bg-gray-200 transition-colors">
+                                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Support Card -->
+                        <div class="bg-white rounded-xl border border-gray-200 p-6">
+                            <h4 class="font-semibold text-gray-800 mb-4">Need Help?</h4>
+                            <p class="text-gray-600 mb-4">We're here to assist you with any questions or concerns.</p>
+                            <a href="#" onclick="closeModal(document.getElementById('account-modal'), document.getElementById('account-modal-content')); setTimeout(() => showContactForm(), 300);" class="inline-flex items-center gap-2 text-green-700 hover:text-green-800 font-medium">
+                                <i data-lucide="mail" class="w-4 h-4"></i>
+                                Contact Support
+                            </a>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="static/js/constants.js"></script>
+    <script src="static/js/notifications.js"></script>
+    <script src="static/js/modal.js"></script>
+    <script src="static/js/cookie.js"></script>
+    <script src="static/js/navigation.js"></script>
+    <script src="static/js/products.js"></script>
+    <script src="static/js/cart.js"></script>
+    <script src="static/js/auth.js"></script>
+
+    <script>
+        // Minimal initializer that wires modules together. All heavy-lifting lives in static/js/*.js
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize navigation (mobile menu, page routing)
+            if (typeof initializeNavigation === 'function') initializeNavigation();
+
+            // Initialize auth handlers (forms, UI state)
+            if (typeof initializeAuth === 'function') initializeAuth();
+
+            // Load cookie consent and preferences
+            if (typeof checkCookieConsent === 'function') checkCookieConsent();
+            if (typeof loadUserPreferences === 'function') loadUserPreferences();
+
+            // Initialize cart state
+            if (typeof loadCart === 'function') loadCart();
+
+            // Render icons
+            if (window.lucide && typeof window.lucide.createIcons === 'function') window.lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

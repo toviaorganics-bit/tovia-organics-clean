@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Verification Success - Tovia Organics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full bg-white shadow-lg rounded-lg p-8 text-center">
+        <div class="mb-4 flex justify-center">
+            <svg class="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900 mb-4">Account Verified!</h1>
+        <p class="text-gray-600 mb-8">Your email has been verified successfully. You can now access all features of your account.</p>
+        <div class="space-y-4">
+            <a href="#" id="return-button" 
+               class="inline-block bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+                Return to Store
+            </a>
+        </div>
+    </div>
+    
+    <script>
+        // Function to notify parent window of verification success
+        function notifyParentWindow() {
+            if (window.opener && !window.opener.closed) {
+                // If opened in a popup/new window, try to call the parent's refresh function
+                try {
+                    if (typeof window.opener.refreshVerificationStatus === 'function') {
+                        window.opener.refreshVerificationStatus();
+                    }
+                    // Also try to trigger a general refresh
+                    if (typeof window.opener.checkUserStatusOnFocus === 'function') {
+                        window.opener.checkUserStatusOnFocus();
+                    }
+                } catch (error) {
+                    console.log('Could not notify parent window:', error);
+                }
+            }
+        }
+
+        // Set up return button click handler
+        document.getElementById('return-button').addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Notify parent window before redirecting
+            notifyParentWindow();
+            
+            // Redirect after a short delay
+            setTimeout(() => {
+                if (window.opener && !window.opener.closed) {
+                    // If opened in popup, close this window and focus parent
+                    window.opener.focus();
+                    window.close();
+                } else {
+                    // Otherwise redirect in same window
+                    window.location.href = '/';
+                }
+            }, 500);
+        });
+
+        // Auto-notify parent window on page load
+        window.addEventListener('load', () => {
+            notifyParentWindow();
+            
+            // Auto-redirect after 3 seconds
+            setTimeout(() => {
+                if (window.opener && !window.opener.closed) {
+                    window.opener.focus();
+                    window.close();
+                } else {
+                    window.location.href = '/';
+                }
+            }, 3000);
+        });
+    </script>
+</body>
+</html>
